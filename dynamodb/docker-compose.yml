@@ -1,0 +1,38 @@
+version: '3.9'
+
+services:
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    container_name: local-dynamodb
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
+    ports:
+      - "${DYNAMODB_PORT:-8000}:8000"
+    networks:
+      - local-infra
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000 || exit 1"]
+      timeout: 5s
+      retries: 5
+      interval: 5s
+
+  dynamodb-admin:
+    image: aaronshaf/dynamodb-admin
+    container_name: local-dynamodb-admin
+    environment:
+      DYNAMO_ENDPOINT: http://dynamodb:8000
+      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-local}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-local}
+    ports:
+      - "${DYNAMODB_ADMIN_PORT:-8001}:8001"
+    depends_on:
+      - dynamodb
+    networks:
+      - local-infra
+    profiles:
+      - admin
+
+networks:
+  local-infra:
+    external: true
+    name: local-infra

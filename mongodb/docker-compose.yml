@@ -1,0 +1,48 @@
+version: '3.9'
+
+services:
+  mongodb:
+    image: mongo:6
+    container_name: local-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-root123}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-bomcalendar}
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongodb-data:/data/db
+      - ./init:/docker-entrypoint-initdb.d
+    networks:
+      - local-infra
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      timeout: 10s
+      retries: 5
+      interval: 10s
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: local-mongo-express
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_ROOT_USER:-root}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_ROOT_PASSWORD:-root123}
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_ROOT_USER:-root}:${MONGO_ROOT_PASSWORD:-root123}@mongodb:27017/
+      ME_CONFIG_BASICAUTH: false
+    ports:
+      - "${MONGO_EXPRESS_PORT:-8083}:8081"
+    depends_on:
+      - mongodb
+    networks:
+      - local-infra
+    profiles:
+      - admin
+
+networks:
+  local-infra:
+    external: true
+    name: local-infra
+
+volumes:
+  mongodb-data:
+    name: mongodb-data

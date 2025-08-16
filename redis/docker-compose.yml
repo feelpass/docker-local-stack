@@ -1,0 +1,41 @@
+version: '3.9'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: local-redis
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - local-infra
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 5s
+      retries: 5
+      interval: 5s
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: local-redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379${REDIS_PASSWORD:+:$REDIS_PASSWORD}
+    ports:
+      - "${REDIS_COMMANDER_PORT:-8081}:8081"
+    depends_on:
+      - redis
+    networks:
+      - local-infra
+    profiles:
+      - admin
+
+networks:
+  local-infra:
+    external: true
+    name: local-infra
+
+volumes:
+  redis-data:
+    name: redis-data
