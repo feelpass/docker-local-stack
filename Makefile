@@ -29,7 +29,13 @@ help: ## Show this help message
 	@echo "  $(GREEN)kafka$(NC)      - Kafka cluster with UI"
 	@echo ""
 	@echo "Global Commands:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-15s$(NC) %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | grep -E '^(up-all|down-all|status|urls|help|network|setup|ps)' | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
+	@echo ""
+	@echo "Docker Maintenance:"
+	@grep -E '^docker-[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
+	@echo ""
+	@echo "Backup & Health:"
+	@grep -E '^(backup|restore|health)[a-zA-Z_-]*:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Service Commands:"
 	@echo "  make mysql-up      # Start MySQL"
@@ -63,6 +69,8 @@ up-all: network ## Start all services
 	@$(MAKE) -C dynamodb up
 	@$(MAKE) -C mongodb up
 	@$(MAKE) -C kafka up
+	@$(MAKE) -C elasticsearch up
+	@$(MAKE) -C minio up
 	@echo "$(GREEN)✅ All services started!$(NC)"
 
 .PHONY: up-all-admin
@@ -73,6 +81,8 @@ up-all-admin: network ## Start all services with admin UIs
 	@$(MAKE) -C dynamodb up-admin
 	@$(MAKE) -C mongodb up-admin
 	@$(MAKE) -C kafka up-admin
+	@$(MAKE) -C elasticsearch up-admin
+	@$(MAKE) -C minio up
 	@echo "$(GREEN)✅ All services with admin UIs started!$(NC)"
 
 .PHONY: down-all
@@ -83,6 +93,8 @@ down-all: ## Stop all services
 	@$(MAKE) -C dynamodb down 2>/dev/null || true
 	@$(MAKE) -C mongodb down 2>/dev/null || true
 	@$(MAKE) -C kafka down 2>/dev/null || true
+	@$(MAKE) -C elasticsearch down 2>/dev/null || true
+	@$(MAKE) -C minio down 2>/dev/null || true
 	@echo "$(GREEN)✅ All services stopped!$(NC)"
 
 .PHONY: status
@@ -103,6 +115,12 @@ status: ## Show status of all services
 	@echo ""
 	@echo "Kafka:"
 	@$(MAKE) -C kafka status 2>/dev/null || echo "  Not running"
+	@echo ""
+	@echo "Elasticsearch:"
+	@$(MAKE) -C elasticsearch status 2>/dev/null || echo "  Not running"
+	@echo ""
+	@echo "MinIO:"
+	@$(MAKE) -C minio status 2>/dev/null || echo "  Not running"
 
 .PHONY: clean-all
 clean-all: ## Remove all service data (WARNING!)
@@ -114,6 +132,8 @@ clean-all: ## Remove all service data (WARNING!)
 	@$(MAKE) -C dynamodb clean 2>/dev/null || true
 	@$(MAKE) -C mongodb clean 2>/dev/null || true
 	@$(MAKE) -C kafka clean 2>/dev/null || true
+	@$(MAKE) -C elasticsearch clean 2>/dev/null || true
+	@$(MAKE) -C minio clean 2>/dev/null || true
 	@echo "$(GREEN)✅ All data removed!$(NC)"
 
 # ============================================
@@ -232,6 +252,48 @@ kafka-topics: ## List Kafka topics
 	@$(MAKE) -C kafka topics
 
 # ============================================
+# Elasticsearch Commands
+# ============================================
+.PHONY: elasticsearch-up
+elasticsearch-up: network ## Start Elasticsearch
+	@$(MAKE) -C elasticsearch up
+
+.PHONY: elasticsearch-up-admin
+elasticsearch-up-admin: network ## Start Elasticsearch with Kibana
+	@$(MAKE) -C elasticsearch up-admin
+
+.PHONY: elasticsearch-down
+elasticsearch-down: ## Stop Elasticsearch
+	@$(MAKE) -C elasticsearch down
+
+.PHONY: elasticsearch-logs
+elasticsearch-logs: ## Show Elasticsearch logs
+	@$(MAKE) -C elasticsearch logs
+
+.PHONY: elasticsearch-indices
+elasticsearch-indices: ## List Elasticsearch indices
+	@$(MAKE) -C elasticsearch indices
+
+# ============================================
+# MinIO Commands
+# ============================================
+.PHONY: minio-up
+minio-up: network ## Start MinIO
+	@$(MAKE) -C minio up
+
+.PHONY: minio-down
+minio-down: ## Stop MinIO
+	@$(MAKE) -C minio down
+
+.PHONY: minio-logs
+minio-logs: ## Show MinIO logs
+	@$(MAKE) -C minio logs
+
+.PHONY: minio-buckets
+minio-buckets: ## List MinIO buckets
+	@$(MAKE) -C minio buckets
+
+# ============================================
 # Development Presets
 # ============================================
 .PHONY: dev
@@ -298,9 +360,216 @@ urls: ## Show all service URLs
 		fi; \
 		echo ""; \
 	fi
+	@if docker ps | grep -q local-elasticsearch; then \
+		echo "$(YELLOW)Elasticsearch:$(NC)"; \
+		echo "  Database: http://localhost:9200"; \
+		if docker ps | grep -q local-kibana; then \
+			echo "  Kibana: http://localhost:5601"; \
+		fi; \
+		echo ""; \
+	fi
+	@if docker ps | grep -q local-minio; then \
+		echo "$(YELLOW)MinIO:$(NC)"; \
+		echo "  API: http://localhost:9000"; \
+		echo "  Console: http://localhost:9001"; \
+		echo ""; \
+	fi
+
+# ============================================
+# Backup and Restore Commands
+# ============================================
+.PHONY: backup
+backup: ## Backup all service data
+	@echo "$(GREEN)Starting backup process...$(NC)"
+	@./scripts/backup.sh all
+	@echo "$(GREEN)✅ Backup completed!$(NC)"
+
+.PHONY: backup-service
+backup-service: ## Backup specific service (use SERVICE=mysql|redis|mongodb|etc)
+	@./scripts/backup.sh $(SERVICE)
+
+.PHONY: restore
+restore: ## Restore from backup (use BACKUP_DIR=backups/YYYYMMDD_HHMMSS)
+	@if [ -z "$(BACKUP_DIR)" ]; then \
+		echo "$(RED)Error: BACKUP_DIR is required$(NC)"; \
+		echo "Usage: make restore BACKUP_DIR=backups/20240101_120000"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)Starting restore process...$(NC)"
+	@./scripts/restore.sh $(BACKUP_DIR) all
+	@echo "$(GREEN)✅ Restore completed!$(NC)"
+
+.PHONY: health
+health: ## Show health check dashboard
+	@./scripts/health-check.sh
+
+.PHONY: health-json
+health-json: ## Show health check in JSON format
+	@./scripts/health-check.sh --json
 
 .PHONY: ps
 ps: status ## Alias for status
+
+# ============================================
+# Docker Maintenance & Troubleshooting
+# ============================================
+.PHONY: docker-clean
+docker-clean: ## Clean up stopped containers and unused images
+	@echo "$(YELLOW)Cleaning up Docker resources...$(NC)"
+	@docker container prune -f
+	@docker image prune -f
+	@echo "$(GREEN)✅ Docker cleanup completed$(NC)"
+
+.PHONY: docker-clean-all
+docker-clean-all: ## Deep clean - remove all stopped containers, unused images, volumes, networks
+	@echo "$(RED)WARNING: This will remove all unused Docker resources!$(NC)"
+	@echo "Press Ctrl+C to cancel, or Enter to continue..."
+	@read confirm
+	@docker system prune -af --volumes
+	@echo "$(GREEN)✅ Deep cleanup completed$(NC)"
+
+.PHONY: docker-stats
+docker-stats: ## Show real-time resource usage statistics
+	@docker stats --format "table {{.Container}}\t{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}"
+
+.PHONY: docker-disk
+docker-disk: ## Show Docker disk usage
+	@echo "$(YELLOW)Docker Disk Usage:$(NC)"
+	@docker system df -v
+	@echo ""
+	@echo "$(YELLOW)Volume Sizes:$(NC)"
+	@docker volume ls -q | xargs -I {} sh -c 'echo -n "{}: " && docker run --rm -v {}:/data alpine du -sh /data 2>/dev/null | cut -f1'
+
+.PHONY: docker-logs-size
+docker-logs-size: ## Show size of container logs
+	@echo "$(YELLOW)Container Log Sizes:$(NC)"
+	@for container in $$(docker ps -aq); do \
+		name=$$(docker inspect -f '{{.Name}}' $$container | sed 's/\///'); \
+		size=$$(docker inspect -f '{{.LogPath}}' $$container | xargs ls -lh 2>/dev/null | awk '{print $$5}'); \
+		if [ -n "$$size" ]; then \
+			echo "$$name: $$size"; \
+		fi; \
+	done
+
+.PHONY: docker-clean-logs
+docker-clean-logs: ## Clear all container logs
+	@echo "$(YELLOW)Clearing container logs...$(NC)"
+	@for container in $$(docker ps -aq); do \
+		docker inspect -f '{{.LogPath}}' $$container | xargs truncate -s 0 2>/dev/null || true; \
+	done
+	@echo "$(GREEN)✅ Logs cleared$(NC)"
+
+.PHONY: docker-remove-volumes
+docker-remove-volumes: ## Remove all unused volumes
+	@echo "$(YELLOW)Removing unused volumes...$(NC)"
+	@docker volume prune -f
+	@echo "$(GREEN)✅ Unused volumes removed$(NC)"
+
+.PHONY: docker-remove-networks
+docker-remove-networks: ## Remove all unused networks (except local-infra)
+	@echo "$(YELLOW)Removing unused networks...$(NC)"
+	@docker network prune -f
+	@echo "$(GREEN)✅ Unused networks removed$(NC)"
+
+.PHONY: docker-fix-space
+docker-fix-space: ## Emergency space recovery - aggressive cleanup
+	@echo "$(RED)🚨 Emergency Docker Space Recovery 🚨$(NC)"
+	@echo "This will:"
+	@echo "  1. Stop all our services"
+	@echo "  2. Remove stopped containers"
+	@echo "  3. Remove unused images"
+	@echo "  4. Clear container logs"
+	@echo "  5. Remove unused volumes and networks"
+	@echo ""
+	@echo "Press Ctrl+C to cancel, or Enter to continue..."
+	@read confirm
+	@$(MAKE) down-all
+	@docker container prune -f
+	@docker image prune -af
+	@for container in $$(docker ps -aq); do \
+		docker inspect -f '{{.LogPath}}' $$container | xargs truncate -s 0 2>/dev/null || true; \
+	done
+	@docker volume prune -f
+	@docker network prune -f
+	@docker system prune -af --volumes
+	@echo "$(GREEN)✅ Emergency cleanup completed!$(NC)"
+	@docker system df
+
+.PHONY: docker-inspect-size
+docker-inspect-size: ## Show detailed size breakdown of Docker resources
+	@echo "$(YELLOW)=== Docker Resource Usage ===$(NC)"
+	@echo ""
+	@echo "$(BLUE)Images:$(NC)"
+	@docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}" | head -20
+	@echo ""
+	@echo "$(BLUE)Containers:$(NC)"
+	@docker ps -as --format "table {{.Names}}\t{{.Status}}\t{{.Size}}"
+	@echo ""
+	@echo "$(BLUE)Volumes:$(NC)"
+	@docker volume ls -q | while read vol; do \
+		size=$$(docker run --rm -v $$vol:/data alpine du -sh /data 2>/dev/null | cut -f1); \
+		echo "$$vol: $$size"; \
+	done
+	@echo ""
+	@echo "$(BLUE)System Summary:$(NC)"
+	@docker system df
+
+.PHONY: docker-restart-daemon
+docker-restart-daemon: ## Restart Docker daemon (requires sudo)
+	@echo "$(YELLOW)Restarting Docker daemon...$(NC)"
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		echo "Please restart Docker Desktop manually on macOS"; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		sudo systemctl restart docker; \
+		echo "$(GREEN)✅ Docker daemon restarted$(NC)"; \
+	else \
+		echo "$(RED)Unsupported OS$(NC)"; \
+	fi
+
+.PHONY: docker-check
+docker-check: ## Check Docker installation and resources
+	@echo "$(YELLOW)Docker System Information:$(NC)"
+	@docker version
+	@echo ""
+	@echo "$(YELLOW)Docker Info:$(NC)"
+	@docker info 2>/dev/null | grep -E "Containers|Images|Server Version|Storage Driver|Memory|CPUs"
+	@echo ""
+	@echo "$(YELLOW)Disk Space:$(NC)"
+	@df -h | grep -E "^/|Filesystem"
+	@echo ""
+	@$(MAKE) docker-disk
+
+.PHONY: containers-restart
+containers-restart: ## Restart all running containers
+	@echo "$(YELLOW)Restarting all containers...$(NC)"
+	@docker restart $$(docker ps -q) 2>/dev/null || echo "No containers to restart"
+	@echo "$(GREEN)✅ Containers restarted$(NC)"
+
+.PHONY: containers-stop-all
+containers-stop-all: ## Stop ALL Docker containers (not just our services)
+	@echo "$(RED)Stopping ALL Docker containers...$(NC)"
+	@docker stop $$(docker ps -aq) 2>/dev/null || echo "No containers to stop"
+	@echo "$(GREEN)✅ All containers stopped$(NC)"
+
+.PHONY: fix-permissions
+fix-permissions: ## Fix permission issues with volumes
+	@echo "$(YELLOW)Fixing volume permissions...$(NC)"
+	@for vol in mysql-data redis-data mongodb-data kafka-data elasticsearch-data minio-data; do \
+		docker run --rm -v $$vol:/data alpine chown -R 1000:1000 /data 2>/dev/null || true; \
+	done
+	@echo "$(GREEN)✅ Permissions fixed$(NC)"
+
+.PHONY: docker-pull-all
+docker-pull-all: ## Update all service images to latest versions
+	@echo "$(YELLOW)Pulling latest images...$(NC)"
+	@docker compose -f mysql/docker-compose.yml pull
+	@docker compose -f redis/docker-compose.yml pull
+	@docker compose -f mongodb/docker-compose.yml pull
+	@docker compose -f dynamodb/docker-compose.yml pull
+	@docker compose -f kafka/docker-compose.yml pull
+	@docker compose -f elasticsearch/docker-compose.yml pull
+	@docker compose -f minio/docker-compose.yml pull
+	@echo "$(GREEN)✅ All images updated$(NC)"
 
 # ============================================
 # AWS Profile Management
