@@ -3,6 +3,9 @@
 # DynamoDB initialization script
 # This script creates tables and sample data for DynamoDB Local
 
+# DynamoDB Local용 가짜 자격 (실계정 자격 불필요)
+export AWS_ACCESS_KEY_ID=local AWS_SECRET_ACCESS_KEY=local AWS_DEFAULT_REGION=ap-northeast-2
+
 echo "🚀 Initializing DynamoDB tables..."
 
 # Wait for DynamoDB to be ready

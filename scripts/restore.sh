@@ -5,6 +5,9 @@
 
 set -e
 
+# DynamoDB Local용 가짜 자격 (실계정 자격 불필요)
+export AWS_ACCESS_KEY_ID=local AWS_SECRET_ACCESS_KEY=local AWS_DEFAULT_REGION=ap-northeast-2
+
 # Color codes
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'

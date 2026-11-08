@@ -51,11 +51,11 @@ init: ## Initialize DynamoDB tables
 
 .PHONY: list-tables
 list-tables: ## List all tables
-	@aws dynamodb list-tables --endpoint-url http://localhost:8000 --region ap-northeast-2
+	@AWS_ACCESS_KEY_ID=local AWS_SECRET_ACCESS_KEY=local aws dynamodb list-tables --endpoint-url http://localhost:8000 --region ap-northeast-2
 
 .PHONY: scan
 scan: ## Scan table (use TABLE=tablename)
-	@aws dynamodb scan --table-name $(TABLE) --endpoint-url http://localhost:8000 --region ap-northeast-2
+	@AWS_ACCESS_KEY_ID=local AWS_SECRET_ACCESS_KEY=local aws dynamodb scan --table-name $(TABLE) --endpoint-url http://localhost:8000 --region ap-northeast-2
 
 .PHONY: shell
 shell: ## Open AWS CLI shell in container
@@ -72,10 +72,6 @@ network: ## Create docker network if not exists
 # ============================================
 # AWS Profile Management
 # ============================================
-.PHONY: aws-profile
-aws-profile: ## Switch AWS profile (use PROFILE=dev|staging|prod)
-	@../aws/switch-profile.sh $(PROFILE)
-
 .PHONY: aws-whoami
 aws-whoami: ## Show current AWS profile and credentials
 	@echo "Current AWS Profile: $${AWS_PROFILE:-default}"
@@ -86,7 +82,7 @@ aws-whoami: ## Show current AWS profile and credentials
 .PHONY: aws-test
 aws-test: ## Test AWS credentials with DynamoDB
 	@echo "Testing DynamoDB connection..."
-	@aws dynamodb list-tables --endpoint-url http://localhost:8000 --region $${AWS_REGION:-ap-northeast-2} && echo "✅ Connection successful" || echo "❌ Connection failed"
+	@AWS_ACCESS_KEY_ID=local AWS_SECRET_ACCESS_KEY=local aws dynamodb list-tables --endpoint-url http://localhost:8000 --region $${AWS_REGION:-ap-northeast-2} && echo "✅ Connection successful" || echo "❌ Connection failed"
 
 .PHONY: help
 help: ## Show this help
