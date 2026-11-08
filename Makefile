@@ -574,10 +574,6 @@ docker-pull-all: ## Update all service images to latest versions
 # ============================================
 # AWS Profile Management
 # ============================================
-.PHONY: aws-profile
-aws-profile: ## Switch AWS profile (use PROFILE=dev|staging|prod)
-	@./aws/switch-profile.sh $(PROFILE)
-
 .PHONY: aws-profiles
 aws-profiles: ## List available AWS profiles
 	@echo "$(GREEN)Available AWS Profiles:$(NC)"
@@ -599,7 +595,7 @@ aws-whoami: ## Show current AWS profile
 aws-test: ## Test AWS credentials
 	@echo "$(YELLOW)Testing AWS credentials...$(NC)"
 	@if docker ps | grep -q local-dynamodb; then \
-		aws dynamodb list-tables --endpoint-url http://localhost:8000 --region $${AWS_REGION:-ap-northeast-2} && \
+		AWS_ACCESS_KEY_ID=local AWS_SECRET_ACCESS_KEY=local aws dynamodb list-tables --endpoint-url http://localhost:8000 --region $${AWS_REGION:-ap-northeast-2} && \
 		echo "$(GREEN)✅ DynamoDB Local connection successful$(NC)" || \
 		echo "$(RED)❌ DynamoDB Local connection failed$(NC)"; \
 	else \

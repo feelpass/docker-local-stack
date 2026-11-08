@@ -560,44 +560,6 @@ AWS_PROFILE_PROD_SECRET=your-prod-secret
 AWS_PROFILE_PROD_REGION=us-east-1
 ```
 
-#### 프로파일 전환 방법
-
-```bash
-# 방법 1: make 명령어 사용 (권장)
-make aws-profile PROFILE=dev     # 개발 환경으로 전환
-make aws-profile PROFILE=staging # 스테이징 환경으로 전환
-make aws-profile PROFILE=prod    # 운영 환경으로 전환
-make aws-profile PROFILE=default # 로컬 환경으로 전환
-
-# 방법 2: 스크립트 직접 실행
-./aws/switch-profile.sh dev
-./aws/switch-profile.sh staging
-./aws/switch-profile.sh prod
-
-# 현재 프로파일 확인
-make aws-whoami
-```
-
-#### AWS 프로파일 사용 예제
-
-```bash
-# 1. 개발 환경에서 DynamoDB 사용
-make aws-profile PROFILE=dev
-make dynamodb-up
-aws dynamodb list-tables --endpoint-url http://localhost:8000
-
-# 2. 스테이징 환경으로 전환하여 테스트
-make aws-profile PROFILE=staging
-# 이제 DynamoDB는 스테이징 자격 증명을 사용합니다
-
-# 3. 프로덕션 환경 (주의 필요!)
-make aws-profile PROFILE=prod
-# 프로덕션 자격 증명으로 작업
-
-# 4. 로컬 개발로 복귀
-make aws-profile PROFILE=default
-```
-
 ## 🌐 네트워크
 
 모든 서비스는 `local-infra`라는 공유 Docker 네트워크를 사용합니다:
@@ -649,9 +611,6 @@ make fix-permissions       # 볼륨 권한 수정
 ### AWS 프로파일 관리
 ```bash
 make aws-profiles    # 사용 가능한 프로파일 목록
-make aws-profile PROFILE=dev     # dev 프로파일로 전환
-make aws-profile PROFILE=staging # staging 프로파일로 전환
-make aws-profile PROFILE=prod    # prod 프로파일로 전환
 make aws-whoami      # 현재 프로파일 확인
 make aws-test        # AWS 연결 테스트
 make aws-config      # AWS 설정 편집
@@ -780,18 +739,6 @@ Docker Desktop 설정에서 메모리를 최소 4GB로 설정하세요.
 
 ### AWS 프로파일 관련 문제
 
-#### 프로파일 전환이 안 될 때
-```bash
-# 환경 변수 직접 확인
-cat .env | grep AWS_
-
-# 프로파일 수동 리셋
-make aws-profile PROFILE=default
-
-# 스크립트 권한 문제 해결
-chmod +x aws/switch-profile.sh
-```
-
 #### DynamoDB 연결 실패
 ```bash
 # 엔드포인트 URL 확인
@@ -861,8 +808,6 @@ r = redis.Redis(host='localhost', port=int(os.getenv('REDIS_PORT', 6379)))
 
 ### DynamoDB 사용
 ```bash
-# AWS 프로파일 전환 후 사용
-make aws-profile PROFILE=dev
 aws dynamodb list-tables \
   --endpoint-url http://localhost:${DYNAMODB_PORT} \
   --region ${AWS_REGION}
@@ -875,22 +820,6 @@ AWS.config.update({
   region: process.env.AWS_REGION,
   endpoint: `http://localhost:${process.env.DYNAMODB_PORT}`
 });
-```
-
-### AWS 프로파일 전환 예제
-```bash
-# 개발 환경으로 전환
-make aws-profile PROFILE=dev
-make dynamodb-up
-make dynamodb-init
-
-# 스테이징 환경으로 전환
-make aws-profile PROFILE=staging
-# DynamoDB 테이블이 스테이징 credentials로 생성됨
-
-# 프로덕션 환경으로 전환
-make aws-profile PROFILE=prod
-# 주의: 프로덕션 credentials 사용
 ```
 
 ### Kafka 메시지 발행/소비
